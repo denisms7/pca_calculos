@@ -60,6 +60,33 @@ ARQ_RESTOS_DET = "restos_a_pagar_detalhes.csv"
 ARQ_RESTOS_GRP = "restos_a_pagar_grupos.csv"
 ARQ_SALDO = "saldo_contas_despesa.csv"
 
+# Elementos de despesa que o usuario pode escolher (via multiselecao na
+# barra lateral) para compor a "Folha de Salario". As chaves sao os rotulos
+# mostrados na tela; os valores sao o codigo no nivel "elemento de despesa"
+# (categoria.grupo.modalidade.elemento -- 4 primeiros segmentos).
+ELEMENTOS_FOLHA_SALARIO = {
+    "Vencimentos e Vantagens Fixas - Pessoal Civil (3.1.90.11)": "3.1.90.11",
+    "Contribuições Patronais (3.1.90.13)": "3.1.90.13",
+    "Contribuições Patronais Intraorçamentárias (3.1.91.13)": "3.1.91.13",
+}
+
+# Selecionados por padrao ao abrir o painel (os dois elementos que de fato
+# aparecem nos CSVs atuais). O usuario pode marcar/desmarcar livremente.
+ELEMENTOS_FOLHA_SALARIO_PADRAO = [
+    "Vencimentos e Vantagens Fixas - Pessoal Civil (3.1.90.11)",
+    "Contribuições Patronais (3.1.90.13)",
+]
+
+
+def _prefixo_elemento(codigo: str) -> str:
+    """Reduz um codigo de natureza de despesa aos 4 primeiros segmentos
+    (categoria.grupo.modalidade.elemento). E' nesse nivel que
+    ELEMENTOS_FOLHA_SALARIO esta definido; os CSVs trazem o desdobramento
+    completo (ex.: "3.1.90.11.01.01"), entao a comparacao usa so o prefixo
+    comum."""
+    partes = (codigo or "").split(".")
+    return ".".join(partes[:4])
+
 
 # --------------------------------------------------------------------------
 # Regras de classificacao por secretaria (usadas nos Restos a Pagar)
@@ -270,6 +297,21 @@ periodo = st.sidebar.date_input(
     max_value=data_max.date(),
 )
 
+elementos_folha_sel = st.sidebar.multiselect(
+    "Folha de Salário — elementos de despesa a somar",
+    options=list(ELEMENTOS_FOLHA_SALARIO.keys()),
+    default=ELEMENTOS_FOLHA_SALARIO_PADRAO,
+    help="Marque ou desmarque os elementos que devem entrar no KPI e no "
+    "filtro de Folha de Salário abaixo.",
+)
+_prefixos_folha_sel = {ELEMENTOS_FOLHA_SALARIO[r] for r in elementos_folha_sel}
+
+filtro_folha = st.sidebar.radio(
+    "Aplicar filtro de Folha de Salário na tabela/gráfico",
+    ["Todas as despesas", "Somente Folha de Salário", "Excluir Folha de Salário"],
+    index=0,
+)
+
 df_pago_f = df_pago[df_pago["secretaria"].isin(secretarias_sel)]
 if isinstance(periodo, tuple) and len(periodo) == 2:
     ini, fim = periodo
@@ -277,6 +319,22 @@ if isinstance(periodo, tuple) and len(periodo) == 2:
         (df_pago_f["data"] >= pd.Timestamp(ini)) & (df_pago_f["data"] <= pd.Timestamp(fim))
     ]
 df_restos_f = df_restos[df_restos["secretaria"].isin(secretarias_sel)]
+
+# Classificacao de folha depende da multiselecao acima, entao e' calculada
+# aqui (nao dentro de preparar_pago) sobre secretaria/período já filtrados.
+df_pago_f = df_pago_f.copy()
+df_pago_f["folha_salario"] = df_pago_f["natureza"].map(
+    lambda n: _prefixo_elemento(n) in _prefixos_folha_sel
+)
+
+# Total de Folha de Salário sempre calculado antes de aplicar o próprio
+# filtro de folha (para o KPI aparecer mesmo com "Todas as despesas").
+total_folha = df_pago_f.loc[df_pago_f["folha_salario"], "liquido"].sum()
+
+if filtro_folha == "Somente Folha de Salário":
+    df_pago_f = df_pago_f[df_pago_f["folha_salario"]]
+elif filtro_folha == "Excluir Folha de Salário":
+    df_pago_f = df_pago_f[~df_pago_f["folha_salario"]]
 
 # --------------------------------------------------------------------------
 # Agregacoes
@@ -308,12 +366,20 @@ st.caption(
     "Falta pagar = Restos a Pagar processados ainda não quitados (saldo em 19/08/2026)."
 )
 
-c1, c2, c3 = st.columns(3)
+c1, c2, c3, c4 = st.columns(4)
 c1.metric("Total pago", formatar_reais(total_pago))
 c2.metric("Total ainda a pagar (Restos a Pagar)", formatar_reais(total_falta))
 c3.metric(
     "% já pago do total",
     f"{(total_pago / total_geral * 100) if total_geral else 0:.1f}%",
+)
+c4.metric(
+    "Folha de Salário (pago no período)",
+    formatar_reais(total_folha),
+    help="Soma dos elementos marcados em 'Folha de Salário — elementos de "
+    "despesa a somar' (barra lateral), dentro das secretarias/período "
+    "selecionados — independente do filtro 'Aplicar filtro de Folha de "
+    "Salário'.",
 )
 
 if (df_restos["secretaria"] == "NÃO CLASSIFICADO").any():
@@ -374,7 +440,7 @@ aba_pago, aba_restos = st.tabs(["Pago (detalhe)", "Restos a pagar (detalhe)"])
 with aba_pago:
     st.caption(f"{len(df_pago_f):,} pagamentos no período/secretarias selecionados".replace(",", "."))
     cols = [
-        "data", "secretaria", "unidade_nome", "empenho", "natureza",
+        "data", "secretaria", "unidade_nome", "empenho", "natureza", "folha_salario",
         "fornecedor_codigo", "fornecedor_nome", "valor_pago", "retencoes", "liquido",
     ]
     st.dataframe(
