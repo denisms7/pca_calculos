@@ -75,6 +75,7 @@ ELEMENTOS_FOLHA_SALARIO = {
 ELEMENTOS_FOLHA_SALARIO_PADRAO = [
     "Vencimentos e Vantagens Fixas - Pessoal Civil (3.1.90.11)",
     "Contribuições Patronais (3.1.90.13)",
+    "Contribuições Patronais Intraorçamentárias (3.1.91.13)",
 ]
 
 
