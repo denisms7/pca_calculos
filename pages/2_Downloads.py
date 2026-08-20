@@ -63,11 +63,10 @@ def zip_da_pasta(arquivos) -> bytes:
     return buffer.getvalue()
 
 
-st.title("Downloads")
+st.title("Fonte de Dados")
 st.caption(
-    "PDFs originais baixados do Equiplano (pasta 'pdf') e os CSVs "
-    "correspondentes, já convertidos e usados nas demais páginas do painel "
-    "(pasta 'data')."
+    "PDFs originais baixados do Equiplano e os CSVs "
+    "correspondentes, já convertidos e usados nas demais páginas do painel."
 )
 
 pdfs = listar_arquivos(PASTA_PDF, ".pdf")

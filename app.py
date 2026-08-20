@@ -37,7 +37,7 @@ pages = {
         ),
     ],
     "Arquivos": [
-        st.Page("pages/2_Downloads.py", title="Downloads"),
+        st.Page("pages/2_Downloads.py", title="Fonte de Dados"),
     ],
 }
 
